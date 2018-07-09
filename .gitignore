@@ -2,4 +2,4 @@ lib/libbpt.a
 src/bpt.o
 src/main.o
 main
-.vscode/*
+.vscode
