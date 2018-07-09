@@ -3,9 +3,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdlib.h>
 
 
-// STRUCTS.
+// STRUCTS & ENUMS
 
 // Header page is the first page (offset 0-4095) of a data file, and contains metadata.
 typedef struct _HeaderPage {
@@ -46,6 +47,7 @@ typedef struct _PageHeader {
     } offset;
 } PageHeader;
 
+// Leaf page contains the key/value pairs.
 typedef struct _Record {
     int64_t key;
     char value[120];
@@ -57,6 +59,7 @@ typedef struct _LeafPage {
     Record records[31];
 } LeafPage;
 
+// Internal page contains the key/offset pairs.
 typedef struct _KeyOffsetPair {
     int64_t key;
     int64_t page_offset;
@@ -69,21 +72,59 @@ typedef struct _InternalPage {
     KeyOffsetPair key_offset_pairs[248];
 } InternalPage;
 
+// The type of pages.
+typedef enum _PAGE_TYPE { e_HeaderPage, e_FreePage, e_LeafPage, e_InternalPage } PAGE_TYPE;
 
-// GLOBALS.
+
+// GLOBALS & CONSTANTS.
 
 // File pointer to database file.
 FILE * g_db_file;
 
+// Page size in bytes.
+const int PAGE_SIZE = 0x1000;
+
 
 // FUNCTION DEFINITIONS.
+
+void * read_page(int64_t offset) {
+    if (!g_db_file || (offset & 7)) return NULL;
+    void * page = calloc(1, PAGE_SIZE);
+    if (!page) return NULL;
+
+    fseek(g_db_file, (long)offset, SEEK_SET);
+    if (fread(page, PAGE_SIZE, 1, g_db_file) != PAGE_SIZE) {
+        free(page);
+        return NULL;
+    }
+    return page;
+}
+
+int write_page(void * page, int64_t offset) {
+    if (!g_db_file || (offset & 7)) return 1;
+    fseek(g_db_file, (long)offset, SEEK_SET);
+    fwrite(page, PAGE_SIZE, 1, g_db_file);
+    fflush(g_db_file);
+    return 0;
+}
 
 int open_db(const char * pathname) {
     if (g_db_file) {
         fclose(g_db_file);
     }
-    g_db_file = fopen(pathname, "rw");
-    return g_db_file != NULL;
+    if ((g_db_file = fopen(pathname, "r+")) == NULL) {
+        if ((g_db_file = fopen(pathname, "w+")) == NULL) {
+            return 1;
+        }
+        HeaderPage header;
+        header.free_page_offset = 0x1000;
+        header.root_page_offset = 0x2000;
+        header.numbef_of_pages = 0;
+        if (write_page(&header, 0x0000)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 int insert(int64_t key, const char * value) {
