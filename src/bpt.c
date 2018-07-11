@@ -89,7 +89,7 @@ const int INTERNAL_ORDER = 249;
 FILE * g_db_file;
 
 // Header page.
-HeaderPage header_page;
+HeaderPage * header_page;
 
 
 // FUNCTION DEFINITIONS.
@@ -116,24 +116,22 @@ int write_page(void * page, int64_t offset) {
 }
 
 int open_db(const char * pathname) {
-    if (g_db_file) {
-        fclose(g_db_file);
-    }
-    memset(&header_page, 0, PAGE_SIZE);
+    // Clean previous data.
+    if (g_db_file) fclose(g_db_file);
+    if (header_page) free(header_page);
+
     if ((g_db_file = fopen(pathname, "r+")) == NULL) {
         if ((g_db_file = fopen(pathname, "w+")) == NULL) {
             return 1;
         }
-        header_page.free_page_offset = 0x1000;
-        header_page.root_page_offset = 0x2000;
-        header_page.numbef_of_pages = 0;
-        if (write_page(&header_page, 0x0000)) {
+        header_page->free_page_offset = 0x1000;
+        header_page->root_page_offset = 0x2000;
+        header_page->numbef_of_pages = 0;
+        if (write_page(header_page, 0x0000)) {
             return 1;
         }
-    } else {
-        HeaderPage * tmp = (HeaderPage *)read_page(0);
-        if (tmp == NULL) return 1;
-        header_page = *tmp;
+    } else if ((header_page = (HeaderPage *)read_page(0)) == NULL) {
+        return 1;
     }
     return 0;
 }
@@ -142,7 +140,44 @@ int insert(int64_t key, const char * value) {
     return 0;
 }
 
+// Find and return leaf page using binary search.
+LeafPage * find_leaf(int64_t key) {
+    if (header_page == NULL) return NULL;
+    InternalPage * page_ptr = (InternalPage *)read_page(header_page->root_page_offset);
+
+    while (!page_ptr->header.is_leaf) {
+        int left = -1, right = page_ptr->header.number_of_keys - 2;
+        while (left < right) {
+            int mid = (left + right) / 2;
+            int64_t mid_key = page_ptr->key_offset_pairs[mid + 1].key;
+            if (key < mid_key) right = mid;
+            else left = mid + 1;
+        }
+
+        free(page_ptr);
+        int64_t next_page_offset = right == -1 ?
+            page_ptr->header.offset.one_more_page : page_ptr->key_offset_pairs[right].page_offset;
+        page_ptr = (InternalPage *)read_page(next_page_offset);
+    }
+
+    return (LeafPage *)page_ptr;
+}
+
 char * find(int64_t key) {
+    LeafPage * page_ptr = find_leaf(key);
+    int left = 0, right = page_ptr->header.number_of_keys - 1;
+    while (left <= right) {
+        int mid = (left + right) / 2;
+        int64_t mid_key = page_ptr->records[mid].key;
+
+        if (key < mid_key) right = mid - 1;
+        else if (key > mid_key) left = mid + 1;
+        else {
+            free(page_ptr);
+            return page_ptr->records[mid].value;
+        }
+    }
+    free(page_ptr);
     return NULL;
 }
 
