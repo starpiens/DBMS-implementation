@@ -14,7 +14,7 @@ int open_db(const char * pathname);
 int insert(int64_t key, const char * value);
 
 /* Find the record containing input ‘key’.
- * If found matching ‘key’, return matched ‘value’ string. Otherwise,return NULL.
+ * If found matching ‘key’, return matched ‘value’ string. Otherwise, return NULL.
  */
 char * find(int64_t key);
 

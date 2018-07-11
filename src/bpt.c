@@ -78,11 +78,18 @@ typedef enum _PAGE_TYPE { e_HeaderPage, e_FreePage, e_LeafPage, e_InternalPage }
 
 // GLOBALS & CONSTANTS.
 
+// Page size in bytes.
+const int PAGE_SIZE = 0x1000;
+// Order of leaf page.
+const int LEAF_ORDER = 32;
+// Order of internal page.
+const int INTERNAL_ORDER = 249;
+
 // File pointer to database file.
 FILE * g_db_file;
 
-// Page size in bytes.
-const int PAGE_SIZE = 0x1000;
+// Header page.
+HeaderPage header_page;
 
 
 // FUNCTION DEFINITIONS.
@@ -112,17 +119,21 @@ int open_db(const char * pathname) {
     if (g_db_file) {
         fclose(g_db_file);
     }
+    memset(&header_page, 0, PAGE_SIZE);
     if ((g_db_file = fopen(pathname, "r+")) == NULL) {
         if ((g_db_file = fopen(pathname, "w+")) == NULL) {
             return 1;
         }
-        HeaderPage header;
-        header.free_page_offset = 0x1000;
-        header.root_page_offset = 0x2000;
-        header.numbef_of_pages = 0;
-        if (write_page(&header, 0x0000)) {
+        header_page.free_page_offset = 0x1000;
+        header_page.root_page_offset = 0x2000;
+        header_page.numbef_of_pages = 0;
+        if (write_page(&header_page, 0x0000)) {
             return 1;
         }
+    } else {
+        HeaderPage * tmp = (HeaderPage *)read_page(0);
+        if (tmp == NULL) return 1;
+        header_page = *tmp;
     }
     return 0;
 }
