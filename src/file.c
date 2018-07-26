@@ -56,7 +56,9 @@ void * read_page(off_t offset) {
 int write_page(const void * page, off_t offset) {
     if (!g_db_file || (offset & 7)) return 1;
     fseeko(g_db_file, offset, SEEK_SET);
-    fwrite(page, PAGE_SIZE, 1, g_db_file);
+    if (fwrite(page, PAGE_SIZE, 1, g_db_file) != PAGE_SIZE) {
+        return 1;
+    }
     fflush(g_db_file);
     return 0;
 }
@@ -64,11 +66,22 @@ int write_page(const void * page, off_t offset) {
 int make_free_pages(u_int64_t num_free_pages) {
     int i;
     for (i = 0; i < num_free_pages; i++) {
-        FreePage *new_free_page = (FreePage *)calloc(1, PAGE_SIZE);
+        FreePage * new_free_page;
+        if ((new_free_page = (FreePage*)calloc(1, PAGE_SIZE)) == NULL) {
+            return 1;
+        }
         new_free_page->next_free_page_offset = header_page->free_page_offset;
         header_page->free_page_offset = (header_page->number_of_pages + i);
         header_page->number_of_pages++;
-        write_page(header_page, 0);
-        write_page(new_free_page, (header_page->number_of_pages + i) * PAGE_SIZE);
+        if (write_page(header_page, 0) != 0) {
+            free(new_free_page);
+            return 1;
+        }
+        if (write_page(new_free_page, (header_page->number_of_pages + i) * PAGE_SIZE) != 0) {
+            free(new_free_page);
+            return 1;
+        }
+        free(new_free_page);
     }
+    return 0;
 }
