@@ -9,6 +9,8 @@
 
 // GLOBALS & CONSTANTS.
 
+extern HeaderPage * header_page;
+
 // Order of leaf page.
 const int LEAF_ORDER = 32;
 // Order of internal page.

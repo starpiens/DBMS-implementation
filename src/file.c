@@ -1,14 +1,12 @@
 #include "file.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 
 // GLOBALS & CONSTANTS.
 
 // File pointer to database file.
 static FILE * g_db_file;
-
-// Page size in bytes.
-const int PAGE_SIZE = 0x1000;
 
 // Header page.
 HeaderPage * header_page;
@@ -30,7 +28,7 @@ int open_db(const char * pathname) {
         }
         header_page->free_page_offset = 0x1000;
         header_page->root_page_offset = 0x2000;
-        header_page->numbef_of_pages = 0;
+        header_page->number_of_pages = 1;
         if (write_page(header_page, 0x0000)) {
             return 1;
         }
@@ -61,4 +59,16 @@ int write_page(const void * page, off_t offset) {
     fwrite(page, PAGE_SIZE, 1, g_db_file);
     fflush(g_db_file);
     return 0;
+}
+
+int make_free_pages(u_int64_t num_free_pages) {
+    int i;
+    for (i = 0; i < num_free_pages; i++) {
+        FreePage *new_free_page = (FreePage *)calloc(1, PAGE_SIZE);
+        new_free_page->next_free_page_offset = header_page->free_page_offset;
+        header_page->free_page_offset = (header_page->number_of_pages + i);
+        header_page->number_of_pages++;
+        write_page(header_page, 0);
+        write_page(new_free_page, (header_page->number_of_pages + i) * PAGE_SIZE);
+    }
 }
