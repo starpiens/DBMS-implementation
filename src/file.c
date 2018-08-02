@@ -96,7 +96,7 @@ int make_free_pages(u_int64_t num_free_pages) {
     off_t prev_free_page_offset = header_page->free_page_offset;
     header_page->free_page_offset = header_page->number_of_pages * PAGE_SIZE;
     header_page->number_of_pages += num_free_pages;
-    
+
     if (write_page_offset(header_page, 0)) {
         header_page->free_page_offset = prev_free_page_offset;
         header_page->number_of_pages -= num_free_pages;
@@ -116,4 +116,23 @@ int make_free_pages(u_int64_t num_free_pages) {
     }
 
     return 0;
+}
+
+// Get new free page from free page list.
+// If success, return pointer to the page. Otherwise, return NULL.
+Page * get_free_page(void) {
+    if (header_page->free_page_offset == 0) {
+        make_free_pages(10);
+    }
+    
+    Page * new_free_page = read_page(header_page->free_page_offset);
+    if (new_free_page == NULL) return NULL;
+
+    header_page->free_page_offset = ((FreePage*)(new_free_page->ptr_page))->next_free_page_offset;
+    if (write_page(header_page)) {
+        header_page->free_page_offset = new_free_page->offset;
+        return NULL;
+    }
+
+    return new_free_page;
 }

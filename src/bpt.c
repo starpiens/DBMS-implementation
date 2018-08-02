@@ -71,7 +71,7 @@ char * find(int64_t key) {
 int insert(int64_t key, const char * value) {
     LeafPage * leaf_page = find_leaf(key);
 
-    if (leaf_page->header.number_of_keys < MAX_RECORDS) {
+    if (leaf_page->header.number_of_keys < LEAF_ORDER) {
         insert_into_leaf(leaf_page, key, value);
     }
     
