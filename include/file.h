@@ -4,6 +4,13 @@
 // Page size in bytes.
 const int PAGE_SIZE = 0x1000;
 
+
+// Wrapper struct for single page.
+typedef struct {
+    void * ptr_page;
+    off_t offset;
+} Page;
+
 // Header page is the first page (offset 0-4095) of a data file, and contains metadata.
 typedef union {
     // Fixed size
@@ -69,7 +76,8 @@ typedef struct _InternalPage {
 } InternalPage;
 
 
-void * read_page(off_t offset);
-int write_page(const void * page, off_t offset);
+Page * read_page(off_t offset);
+int write_page(const Page * const page);
+int write_page_offset(void * page, off_t offset);
 
 #endif

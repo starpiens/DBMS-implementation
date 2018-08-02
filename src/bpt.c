@@ -19,13 +19,6 @@ const int INTERNAL_ORDER = 249;
 
 // FUNCTION DEFINITIONS.
 
-/* Insert input ‘key/value’ (record) to data file at the right place.
- * If success, return 0. Otherwise, return non-zero value.
- */
-int insert(int64_t key, const char * value) {
-    return 0;
-}
-
 // Find and return leaf page using binary search.
 LeafPage * find_leaf(int64_t key) {
     if (header_page == NULL) return NULL;
@@ -68,6 +61,21 @@ char * find(int64_t key) {
     }
     free(page_ptr);
     return NULL;
+}
+
+
+
+/* Insert input ‘key/value’ (record) to data file at the right place.
+ * If success, return 0. Otherwise, return non-zero value.
+ */
+int insert(int64_t key, const char * value) {
+    LeafPage * leaf_page = find_leaf(key);
+
+    if (leaf_page->header.number_of_keys < MAX_RECORDS) {
+        insert_into_leaf(leaf_page, key, value);
+    }
+    
+    return 0;
 }
 
 /* Find the matching record and delete it if found.
