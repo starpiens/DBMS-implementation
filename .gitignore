@@ -1,5 +1,4 @@
 lib/libbpt.a
-src/bpt.o
-src/main.o
+*.o
 main
 .vscode

@@ -63,7 +63,9 @@ char * find(int64_t key) {
     return NULL;
 }
 
-
+void insert_into_leaf(LeafPage * leaf_page, int64_t key, const char * value) {
+    ;
+}
 
 /* Insert input ‘key/value’ (record) to data file at the right place.
  * If success, return 0. Otherwise, return non-zero value.

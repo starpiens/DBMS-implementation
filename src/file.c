@@ -36,7 +36,7 @@ int open_db(const char * pathname) {
         if (write_page_offset(header_page, 0)) {
             return 1;
         }
-    } else if ((header_page = read_page(0)) == NULL) {
+    } else if ((header_page = (HeaderPage*)read_page(0)->ptr_page) == NULL) {
         return 1;
     }
     return 0;
@@ -51,9 +51,10 @@ Page * read_page(off_t offset) {
     
     // Memory allocation
     Page * page;
-    page->offset = offset;
     if ((page = calloc(1, sizeof(Page))) == NULL ||
         (page->ptr_page = calloc(1, PAGE_SIZE)) == NULL) return NULL;
+
+    page->offset = offset;
 
     // Read
     if (fread(page->ptr_page, PAGE_SIZE, 1, g_db_file) != PAGE_SIZE) {
@@ -91,7 +92,6 @@ int write_page_offset(void * page, off_t offset) {
 // Make given number of new free pages.
 // If success, return 0. Otherwise, return 1.
 int make_free_pages(u_int64_t num_free_pages) {
-    int error = 0;
     // Modify header info.
     off_t prev_free_page_offset = header_page->free_page_offset;
     header_page->free_page_offset = header_page->number_of_pages * PAGE_SIZE;
@@ -103,7 +103,6 @@ int make_free_pages(u_int64_t num_free_pages) {
         return 1;
     }
     
-    u_int64_t i = 0;
     for (u_int64_t i = 0; i < num_free_pages; i++) {
         FreePage new_free_page;
         if (i < num_free_pages - 1) {
@@ -124,12 +123,12 @@ Page * get_free_page(void) {
     if (header_page->free_page_offset == 0) {
         make_free_pages(10);
     }
-    
+
     Page * new_free_page = read_page(header_page->free_page_offset);
     if (new_free_page == NULL) return NULL;
 
     header_page->free_page_offset = ((FreePage*)(new_free_page->ptr_page))->next_free_page_offset;
-    if (write_page(header_page)) {
+    if (write_page_offset(header_page, 0)) {
         header_page->free_page_offset = new_free_page->offset;
         return NULL;
     }
