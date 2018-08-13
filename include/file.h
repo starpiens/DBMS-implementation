@@ -61,18 +61,18 @@ typedef struct {
     // If rightmost leaf page, right sibling page offset field is 0.
     u_int64_t right_sibling_page;
     struct {
-        int64_t key;
+        bpt_key_t key;
         char value[120];
     } records[31];
 } LeafPage;
 
 // Internal page is similar to leaf page, but instead of containing 120 bytes of values,
 // it contains 8 bytes of another page (internal or leaf) offset.
-typedef struct _InternalPage {
+typedef struct {
     PageHeader header;
     u_int64_t one_more_page;
     struct {
-        int64_t key;
+        bpt_key_t key;
         u_int64_t page_offset;
     } key_offset_pairs[248];
 } InternalPage;
