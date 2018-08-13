@@ -2,6 +2,7 @@
 #define __FILE_H__
 
 #include "sys/types.h"
+#include "bpt.h"
 
 // Page size in bytes.
 const int PAGE_SIZE = 0x1000;
