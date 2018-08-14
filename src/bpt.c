@@ -34,7 +34,7 @@ Page * find_leaf(bpt_key_t key) {
             else left = mid + 1;
         }
 
-        free(page_ptr);
+        free_page(page_ptr);
         u_int64_t next_page_offset = right == -1 ?
             INTERNAL(page_ptr)->one_more_page : INTERNAL(page_ptr)->key_offset_pairs[right].page_offset;
         page_ptr = read_page(next_page_offset);
@@ -78,7 +78,7 @@ c_bpt_value_t find(bpt_key_t key) {
     Page * leaf_page = find_leaf(key);
     int idx = find_at_leaf(leaf_page, key);
     bpt_value_t val = idx < 0 ? NULL : LEAF(leaf_page)->records[idx].value;
-    free(leaf_page);
+    free_page(leaf_page);
     return val;
 }
 
@@ -94,8 +94,12 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
         return -1;  // Key duplication
     }
 
-    int shift_sz = sizeof(LEAF(leaf_page)->records[0]);
-    memcpy(LEAF(leaf_page)->records + idx + shift_sz, LEAF(leaf_page)->records + idx, LEAF(leaf_page)->header.number_of_keys - idx);
+    // Shift records.
+    memcpy(LEAF(leaf_page)->records + idx + sizeof(LEAF(leaf_page)->records[0]), 
+           LEAF(leaf_page)->records + idx,
+           LEAF(leaf_page)->header.number_of_keys - idx);
+
+    // Insert a new record.
     LEAF(leaf_page)->records[idx].key = key;
     strcpy(LEAF(leaf_page)->records[idx].value, value);
 
@@ -126,7 +130,7 @@ int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
     write_page(new_root);
     
     header_page->root_page_offset = new_root->offset;
-    write_page(header_page);
+    write_page_offset(header_page, 0);
     return 0;
 }
 
@@ -145,13 +149,13 @@ int insert(bpt_key_t key, c_bpt_value_t value) {
     // Case: Leaf page has room for record.
     if (LEAF(leaf_page)->header.number_of_keys < LEAF_ORDER) {
         int ret = insert_into_leaf(leaf_page, key, value);
-        free(leaf_page);
+        free_page(leaf_page);
         return ret;
     }
     
     // Case: Leaf page needs splitting.
     int ret = insert_into_leaf_after_splitting(leaf_page, key, value);
-    free(leaf_page);
+    free_page(leaf_page);
     return ret;
 }
 

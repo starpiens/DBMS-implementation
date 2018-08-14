@@ -42,6 +42,15 @@ int open_db(const char * pathname) {
     return 0;
 }
 
+// Free memory of page.
+void free_page(Page * page) {
+    if (!page) return;
+    if (page->ptr_page) {
+        free(page->ptr_page);
+    }
+    free(page);
+}
+
 // Read single page at given offset (of g_db_file).
 // If success, return pointer to the page. Otherwise, return NULL.
 Page * read_page(off_t offset) {
@@ -58,8 +67,7 @@ Page * read_page(off_t offset) {
 
     // Read
     if (fread(page->ptr_page, PAGE_SIZE, 1, g_db_file) != PAGE_SIZE) {
-        free(page->ptr_page);
-        free(page);
+        free_page(page);
         return NULL;
     }
 
