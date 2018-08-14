@@ -4,6 +4,12 @@
 #include "sys/types.h"
 #include "bpt.h"
 
+#define HEADER(ptr)   ((HeaderPage *)((ptr)->ptr_page))
+#define FREE(ptr)     ((FreePage *)((ptr)->ptr_page))
+#define LEAF(ptr)     ((LeafPage *)((ptr)->ptr_page))
+#define INTERNAL(ptr) ((InternalPage *)((ptr)->ptr_page))
+
+
 // Page size in bytes.
 const int PAGE_SIZE = 0x1000;
 
@@ -82,5 +88,6 @@ typedef struct {
 Page * read_page(off_t offset);
 int write_page(const Page * const page);
 int write_page_offset(void * page, off_t offset);
+Page * get_free_page(void);
 
 #endif

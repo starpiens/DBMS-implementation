@@ -6,10 +6,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define HEADER(ptr)   ((HeaderPage *)((ptr)->ptr_page))
-#define FREE(ptr)     ((FreePage *)((ptr)->ptr_page))
-#define LEAF(ptr)     ((LeafPage *)((ptr)->ptr_page))
-#define INTERNAL(ptr) ((InternalPage *)((ptr)->ptr_page))
 
 // GLOBALS & CONSTANTS.
 
@@ -25,8 +21,9 @@ const int INTERNAL_ORDER = 249;
 
 // Find and return leaf page using binary search.
 Page * find_leaf(bpt_key_t key) {
-    if (header_page == NULL) return NULL;
+    if (!header_page) return NULL;
     Page * page_ptr = read_page(header_page->root_page_offset);
+    if (!page_ptr) return NULL;
 
     while (!INTERNAL(page_ptr)->header.is_leaf) {
         int left = -1, right = INTERNAL(page_ptr)->header.number_of_keys - 2;
@@ -106,18 +103,56 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
     return 0;
 }
 
+/* Insert record into leaf page after splitting.
+ * If success, return 0. Otherwise, return -1.
+ */
+int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
+
+    return 0;
+}
+
+/* Make a new tree.
+ * If success, return 0. Otherwise, return -1.
+ */
+int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
+    Page * new_root = get_free_page();
+    if (!new_root) return -1;
+
+    LEAF(new_root)->header.parent_page_offset = 0;
+    LEAF(new_root)->header.is_leaf            = 1;
+    LEAF(new_root)->header.number_of_keys     = 1;
+    LEAF(new_root)->right_sibling_page        = 0;
+    strcpy(LEAF(new_root)->records[0].value, value);
+    write_page(new_root);
+    
+    header_page->root_page_offset = new_root->offset;
+    write_page(header_page);
+    return 0;
+}
+
 /* Insert input ‘key/value’ (record) to data file at the right place.
  * If success, return 0. Otherwise, return non-zero value.
  */
 int insert(bpt_key_t key, c_bpt_value_t value) {
-    Page * leaf_page = find_leaf(key);
+    // Case: The tree does not exist yet.
+    if (!header_page->root_page_offset) {
+        return make_new_tree(key, value);
+    }
 
+    Page * leaf_page = find_leaf(key);
+    if (!leaf_page) return -1;
+
+    // Case: Leaf page has room for record.
     if (LEAF(leaf_page)->header.number_of_keys < LEAF_ORDER) {
-        insert_into_leaf(leaf_page, key, value);
+        int ret = insert_into_leaf(leaf_page, key, value);
         free(leaf_page);
+        return ret;
     }
     
-    return 0;
+    // Case: Leaf page needs splitting.
+    int ret = insert_into_leaf_after_splitting(leaf_page, key, value);
+    free(leaf_page);
+    return ret;
 }
 
 /* Find the matching record and delete it if found.

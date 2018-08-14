@@ -127,7 +127,7 @@ Page * get_free_page(void) {
     Page * new_free_page = read_page(header_page->free_page_offset);
     if (new_free_page == NULL) return NULL;
 
-    header_page->free_page_offset = ((FreePage*)(new_free_page->ptr_page))->next_free_page_offset;
+    header_page->free_page_offset = FREE(new_free_page)->next_free_page_offset;
     if (write_page_offset(header_page, 0)) {
         header_page->free_page_offset = new_free_page->offset;
         return NULL;
