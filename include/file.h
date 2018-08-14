@@ -86,7 +86,6 @@ typedef struct {
 
 Page * read_page(off_t offset);
 int write_page(const Page * const page);
-int write_page_offset(void * page, off_t offset);
 void free_page(Page * page);
 Page * get_free_page(void);
 

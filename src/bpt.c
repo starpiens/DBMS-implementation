@@ -9,7 +9,7 @@
 
 // GLOBALS & CONSTANTS.
 
-extern HeaderPage * header_page;
+extern Page * header_page;
 
 // Order of leaf page.
 const int LEAF_ORDER = 32;
@@ -22,7 +22,7 @@ const int INTERNAL_ORDER = 249;
 // Find and return leaf page using binary search.
 Page * find_leaf(bpt_key_t key) {
     if (!header_page) return NULL;
-    Page * page_ptr = read_page(header_page->root_page_offset);
+    Page * page_ptr = read_page(0);
     if (!page_ptr) return NULL;
 
     while (!INTERNAL(page_ptr)->header.is_leaf) {
@@ -129,8 +129,8 @@ int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
     strcpy(LEAF(new_root)->records[0].value, value);
     write_page(new_root);
     
-    header_page->root_page_offset = new_root->offset;
-    write_page_offset(header_page, 0);
+    HEADER(header_page)->root_page_offset = new_root->offset;
+    write_page(header_page);
     return 0;
 }
 
@@ -139,7 +139,7 @@ int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
  */
 int insert(bpt_key_t key, c_bpt_value_t value) {
     // Case: The tree does not exist yet.
-    if (!header_page->root_page_offset) {
+    if (!HEADER(header_page)->root_page_offset) {
         return make_new_tree(key, value);
     }
 
