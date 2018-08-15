@@ -13,7 +13,12 @@
 
 // Page size in bytes.
 const int PAGE_SIZE = 0x1000;
-
+typedef enum {
+    HEADER_PAGE,
+    FREE_PAGE,
+    LEAF_PAGE,
+    INTERNAL_PAGE
+} PAGE_TYPE;
 
 // Wrapper struct for single page.
 typedef struct {
@@ -92,8 +97,6 @@ typedef struct {
 Page * read_page(off_t offset);
 int write_page(const Page * const page);
 void free_page(Page * page);
-
-Page * get_free_page(void);
-Page * get_tree_page(bool is_leaf);
+Page * get_new_page(PAGE_TYPE type);
 
 #endif

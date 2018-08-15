@@ -32,14 +32,7 @@ int open_db(const char * pathname) {
         g_db_file = fopen(pathname, "w+");
         if (!g_db_file) return -1;
 
-        header_page           = calloc(1, sizeof(Page));
-        header_page->ptr_page = calloc(1, sizeof(HeaderPage));
-        header_page->offset   = 0;
-
-        HEADER(header_page)->free_page_offset = 0;
-        HEADER(header_page)->root_page_offset = 0;
-        HEADER(header_page)->number_of_pages  = 1;
-        
+        get_new_page(HEADER_PAGE);
         if (write_page(header_page)) return -1;
     }
 
@@ -157,14 +150,33 @@ Page * get_free_page(void) {
     return new_free_page;
 }
 
-/* Get new leaf page or internal page from free page list.
- * 'is_leaf' represents whether type of the page is leaf or internal.
+/* Get new page from free page list. (except header page)
  * If success, return pointer to the page. Otherwise, return NULL.
  */
-Page * get_tree_page(bool is_leaf) {
-    Page * new_page = get_free_page();
-    if (!new_page) return NULL;
-    LEAF(new_page)->header.is_leaf = (int)is_leaf;
-    LEAF(new_page)->header.number_of_keys = 0;
+Page * get_new_page(PAGE_TYPE type) {
+    Page * new_page;
+
+    // Header page.
+    if (type == HEADER_PAGE) {
+        new_page           = calloc(1, sizeof(Page));
+        new_page->ptr_page = calloc(1, sizeof(HeaderPage));
+        new_page->offset   = 0;
+
+        HEADER(new_page)->free_page_offset = 0;
+        HEADER(new_page)->root_page_offset = 0;
+        HEADER(new_page)->number_of_pages  = 1;
+
+    // Free page.
+    } else if (type == FREE_PAGE) {
+        new_page = get_free_page();
+        
+    // Leaf page or internal page.
+    } else {
+        new_page = get_free_page();
+        if (!new_page) return NULL;
+        LEAF(new_page)->header.is_leaf = (type == LEAF_PAGE);
+        LEAF(new_page)->header.number_of_keys = 0;
+    }
+
     return new_page;
 }

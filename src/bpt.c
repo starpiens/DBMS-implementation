@@ -126,7 +126,7 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
  * If success, return 0. Otherwise, return -1.
  */
 int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
-    Page * new_leaf = get_tree_page(true);
+    Page * new_leaf = get_new_page(LEAF_PAGE);
 
     return 0;
 }
@@ -135,7 +135,7 @@ int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_valu
  * If success, return 0. Otherwise, return -1.
  */
 int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
-    Page * new_root = get_free_page();
+    Page * new_root = get_new_page(FREE_PAGE);
     if (!new_root) return -1;
 
     LEAF(new_root)->header.parent_page_offset = 0;
