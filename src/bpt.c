@@ -19,24 +19,38 @@ const int INTERNAL_ORDER = 249;
 
 // FUNCTION DEFINITIONS.
 
-// Find and return leaf page using binary search.
+/* Find the first key in the 'internal_page' which is greater than 'key'.
+ * If success, return the index of upper bound. Otherwise, return -1.
+ * When all keys are not greater than 'key', return the last index.
+ */
+int find_upper_bound_at_internal(Page * internal_page, bpt_key_t key) {
+    if (!internal_page || !INTERNAL(internal_page)) return -1;
+    // [left, right)
+    int left = 0, right = INTERNAL(internal_page)->header.number_of_keys;
+    while (left < right) {
+        int mid = (left + right) >> 1;
+        bpt_key_t mid_key = INTERNAL(internal_page)->key_offset_pairs[mid].key;
+
+        if (key < mid_key) right = mid;
+        else left = mid + 1;
+    }
+    return left;
+}
+
+/* Find and return leaf page for 'key'.
+ * If success, return pointer to leaf page. Otherwise, return NULL.
+ */
 Page * find_leaf(bpt_key_t key) {
     if (!header_page) return NULL;
     Page * page_ptr = read_page(0);
     if (!page_ptr) return NULL;
 
     while (!INTERNAL(page_ptr)->header.is_leaf) {
-        int left = -1, right = INTERNAL(page_ptr)->header.number_of_keys - 2;
-        while (left < right) {
-            int mid = (left + right) >> 1;
-            bpt_key_t mid_key = INTERNAL(page_ptr)->key_offset_pairs[mid + 1].key;
-            if (key < mid_key) right = mid;
-            else left = mid + 1;
-        }
-
+        int idx = find_upper_bound_at_internal(page_ptr, key);
+        off_t next_page_offset = idx ? 
+            INTERNAL(page_ptr)->key_offset_pairs[idx - 1].page_offset : 
+            INTERNAL(page_ptr)->one_more_page;
         free_page(page_ptr);
-        u_int64_t next_page_offset = right == -1 ?
-            INTERNAL(page_ptr)->one_more_page : INTERNAL(page_ptr)->key_offset_pairs[right].page_offset;
         page_ptr = read_page(next_page_offset);
     }
 
@@ -48,13 +62,14 @@ Page * find_leaf(bpt_key_t key) {
  * When all records are less than 'key', return the last index.
  */
 int find_lower_bound_at_leaf(Page * leaf_page, bpt_key_t key) {
-    if (!leaf_page || !leaf_page->ptr_page) return -1;
-    int left = 0, right = LEAF(leaf_page)->header.number_of_keys - 1;
+    if (!leaf_page || !LEAF(leaf_page)) return -1;
+    // [left, right)
+    int left = 0, right = LEAF(leaf_page)->header.number_of_keys;
     while (left < right) {
         int mid = (left + right) >> 1;
         bpt_key_t mid_key = LEAF(leaf_page)->records[mid].key;
         
-        if (mid_key >= key) right = mid;
+        if (key <= mid_key) right = mid;
         else left = mid + 1;
     }
     return left;
@@ -111,6 +126,7 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
  * If success, return 0. Otherwise, return -1.
  */
 int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
+    Page * new_leaf = get_tree_page(true);
 
     return 0;
 }
@@ -126,6 +142,7 @@ int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
     LEAF(new_root)->header.is_leaf            = 1;
     LEAF(new_root)->header.number_of_keys     = 1;
     LEAF(new_root)->right_sibling_page        = 0;
+    LEAF(new_root)->records[0].key = key;
     strcpy(LEAF(new_root)->records[0].value, value);
     write_page(new_root);
     

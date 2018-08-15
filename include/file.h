@@ -3,6 +3,7 @@
 
 #include "sys/types.h"
 #include "bpt.h"
+#include <stdbool.h>
 
 #define HEADER(ptr)   ((HeaderPage *)((ptr)->ptr_page))
 #define FREE(ptr)     ((FreePage *)((ptr)->ptr_page))
@@ -75,6 +76,10 @@ typedef struct {
 
 // Internal page is similar to leaf page, but instead of containing 120 bytes of values,
 // it contains 8 bytes of another page (internal or leaf) offset.
+// one_more_page < key(0)
+// key(0) <= offset(0) < key(1)
+// key(1) <= offset(1) < key(2)
+// ...
 typedef struct {
     PageHeader header;
     u_int64_t one_more_page;
@@ -87,6 +92,8 @@ typedef struct {
 Page * read_page(off_t offset);
 int write_page(const Page * const page);
 void free_page(Page * page);
+
 Page * get_free_page(void);
+Page * get_tree_page(bool is_leaf);
 
 #endif

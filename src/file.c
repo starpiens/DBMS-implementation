@@ -46,7 +46,17 @@ int open_db(const char * pathname) {
     return 0;
 }
 
-// Free memory of page.
+/* Close opened database file.
+ * If success, return 0. Otherwise, return -1.
+ */
+int close_db() {
+    fflush(g_db_file);
+    return -(fclose(g_db_file) != 0);
+}
+
+/* Free memory of page.
+ * free(page); free(page->ptr_page);
+ */
 void free_page(Page * page) {
     if (!page) return;
     if (page->ptr_page) {
@@ -55,8 +65,9 @@ void free_page(Page * page) {
     free(page);
 }
 
-// Read single page at given offset (of g_db_file).
-// If success, return pointer to the page. Otherwise, return NULL.
+/* Read single page at given offset (of g_db_file).
+ * If success, return pointer to the page. Otherwise, return NULL.
+ */
 Page * read_page(off_t offset) {
     // Read preparation
     if (!g_db_file) return NULL;
@@ -79,8 +90,9 @@ Page * read_page(off_t offset) {
     return page;
 }
 
-// Write single page.
-// If success, return 0. Otherwise, return -1.
+/* Write single page.
+ * If success, return 0. Otherwise, return -1.
+ */
 int write_page(const Page * const page) {
     // Write preparation
     if (!g_db_file) return -1;
@@ -95,8 +107,9 @@ int write_page(const Page * const page) {
     return 0;
 }
 
-// Make given number of new free pages.
-// If success, return 0. Otherwise, return -1.
+/* Make given number of new free pages.
+ * If success, return 0. Otherwise, return -1.
+ */
 int make_free_pages(int num_free_pages) {
     // Modify header info.
     off_t prev_free_page_offset = HEADER(header_page)->free_page_offset;
@@ -124,8 +137,9 @@ int make_free_pages(int num_free_pages) {
     return 0;
 }
 
-// Get new free page from free page list.
-// If success, return pointer to the page. Otherwise, return NULL.
+/* Get new free page from free page list.
+ * If success, return pointer to the page. Otherwise, return NULL.
+ */
 Page * get_free_page(void) {
     if (!HEADER(header_page)->free_page_offset) {
         make_free_pages(10);
@@ -141,4 +155,16 @@ Page * get_free_page(void) {
     }
 
     return new_free_page;
+}
+
+/* Get new leaf page or internal page from free page list.
+ * 'is_leaf' represents whether type of the page is leaf or internal.
+ * If success, return pointer to the page. Otherwise, return NULL.
+ */
+Page * get_tree_page(bool is_leaf) {
+    Page * new_page = get_free_page();
+    if (!new_page) return NULL;
+    LEAF(new_page)->header.is_leaf = (int)is_leaf;
+    LEAF(new_page)->header.number_of_keys = 0;
+    return new_page;
 }

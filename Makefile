@@ -1,7 +1,7 @@
 .SUFFIXES: .c .o
 
 CC=gcc
-CFLAGS+= -g -std=c11 -Wall -O2 -fPIC -I $(INCDIR)
+CFLAGS+= -g -std=c11 -Wall -Wextra -O2 -fPIC -I $(INCDIR)
 
 SRCDIR=src/
 INCDIR=include/
