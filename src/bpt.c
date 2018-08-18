@@ -83,7 +83,9 @@ int find_at_leaf(Page * leaf_page, bpt_key_t key) {
     if (idx < 0 || LEAF(leaf_page)->header.number_of_keys == idx) {
         return -1;
     }
-    return -(LEAF(leaf_page)->records[idx].key != key);   // Does lower bound contain 'key'?
+    // Does lower bound contain 'key'?
+    return LEAF(leaf_page)->records[idx].key == key ?
+           idx : -1;
 }
 
 /* Find the record containing input ‘key’.
@@ -105,7 +107,8 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
 
     int idx = find_lower_bound_at_leaf(leaf_page, key);
     if (idx < 0) return -1;     // Error
-    if (idx != LEAF(leaf_page)->header.number_of_keys && LEAF(leaf_page)->records[idx].key == key) {
+    if (idx != LEAF(leaf_page)->header.number_of_keys && 
+            LEAF(leaf_page)->records[idx].key == key) {
         return -1;  // Key duplication
     }
 
@@ -126,7 +129,61 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
  * If success, return 0. Otherwise, return -1.
  */
 int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
+    if (!leaf_page) return -1;
+    if (LEAF(leaf_page)->header.number_of_keys < LEAF_ORDER) {
+        return insert_into_leaf(leaf_page, key, value);
+    }
+
+    Page * old_leaf = leaf_page;
     Page * new_leaf = get_new_page(LEAF_PAGE);
+    if (!new_leaf) return -1;
+
+    int split_idx  = LEAF_ORDER >> 1;
+    int insert_idx = find_lower_bound_at_leaf(old_leaf, key);
+    if (insert_idx < 0) return -1;  // Error 
+    if (insert_idx != LEAF(old_leaf)->header.number_of_keys && 
+            LEAF(old_leaf)->records[insert_idx].key == key) {
+        return -1;  // Key duplication
+    }
+    
+    // Range of memcpy
+    void * start, * end;
+    const int SIZE_RECORD = 128;
+
+    // Does new record need to be inserted in old leaf node?
+    if (insert_idx < split_idx) {
+        start = &LEAF(old_leaf)->records[split_idx - 1];
+        end   = &LEAF(old_leaf)->records[LEAF_ORDER];
+        memcpy(LEAF(new_leaf)->records, start, end - start);
+        
+        start = &LEAF(old_leaf)->records[insert_idx];
+        end   = &LEAF(old_leaf)->records[split_idx - 1];
+        memcpy(start + SIZE_RECORD, start, end - start);
+
+        LEAF(old_leaf)->records[insert_idx].key = key;
+        strcpy(LEAF(old_leaf)->records[insert_idx].value, value);
+
+    // New record need to be inserted in new leaf node
+    } else {
+        start = &LEAF(old_leaf)->records[split_idx];
+        end   = &LEAF(old_leaf)->records[insert_idx];
+        memcpy(LEAF(new_leaf)->records, start, end - start);
+
+        int tmp = end - start + SIZE_RECORD;
+
+        start = end;
+        end   = &LEAF(old_leaf)->records[LEAF_ORDER];
+        memcpy(LEAF(new_leaf)->records + tmp, start, end - start);
+
+        LEAF(new_leaf)->records[insert_idx - split_idx].key = key;
+        strcpy(LEAF(new_leaf)->records[insert_idx - split_idx].value, value);
+    }
+    
+    LEAF(new_leaf)->header.parent_page_offset = LEAF(old_leaf)->header.parent_page_offset;
+    LEAF(old_leaf)->header.number_of_keys = split_idx;
+    LEAF(new_leaf)->header.number_of_keys = LEAF_ORDER + 1 - split_idx;
+    LEAF(new_leaf)->right_sibling_page = LEAF(old_leaf)->right_sibling_page;
+    LEAF(old_leaf)->right_sibling_page = new_leaf->offset;
 
     return 0;
 }
@@ -135,12 +192,10 @@ int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_valu
  * If success, return 0. Otherwise, return -1.
  */
 int make_new_tree(bpt_key_t key, c_bpt_value_t value) {
-    Page * new_root = get_new_page(FREE_PAGE);
+    Page * new_root = get_new_page(LEAF_PAGE);
     if (!new_root) return -1;
 
     LEAF(new_root)->header.parent_page_offset = 0;
-    LEAF(new_root)->header.is_leaf            = 1;
-    LEAF(new_root)->header.number_of_keys     = 1;
     LEAF(new_root)->right_sibling_page        = 0;
     LEAF(new_root)->records[0].key = key;
     strcpy(LEAF(new_root)->records[0].value, value);
@@ -163,15 +218,10 @@ int insert(bpt_key_t key, c_bpt_value_t value) {
     Page * leaf_page = find_leaf(key);
     if (!leaf_page) return -1;
 
-    // Case: Leaf page has room for record.
-    if (LEAF(leaf_page)->header.number_of_keys < LEAF_ORDER) {
-        int ret = insert_into_leaf(leaf_page, key, value);
-        free_page(leaf_page);
-        return ret;
-    }
-    
-    // Case: Leaf page needs splitting.
-    int ret = insert_into_leaf_after_splitting(leaf_page, key, value);
+    int ret = LEAF(leaf_page)->header.number_of_keys < LEAF_ORDER ? // Does leaf page has room for record?
+        insert_into_leaf(leaf_page, key, value) :                   // T - Leaf page has room for record.
+        insert_into_leaf_after_splitting(leaf_page, key, value);    // F - Leaf page must be splitted.
+
     free_page(leaf_page);
     return ret;
 }
