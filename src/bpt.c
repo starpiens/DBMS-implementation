@@ -99,6 +99,114 @@ c_bpt_value_t find(bpt_key_t key) {
     return val;
 }
 
+/* Make new root(internal node) and insert key into it.
+ * If success, return 0. Otherwise, return -1.
+ */
+int insert_into_new_root(Page * left_child, bpt_key_t key, Page * right_child) {
+
+    return 0;
+}
+
+int insert_into_internal(Page * internal_page, bpt_key_t key, off_t offset) {
+    if (!internal_page) return -1;
+    if (INTERNAL(internal_page)->header.number_of_keys == INTERNAL_ORDER) return -1;
+    
+    int idx = find_upper_bound_at_internal(internal_page, key);
+    if (idx < 0) return -1;
+    
+    // Shift pairs of key and offset.
+    const int SIZE = sizeof(INTERNAL(internal_page)->key_offset_pairs[0]);
+    memcpy(&INTERNAL(internal_page)->key_offset_pairs[idx] + SIZE,
+           &INTERNAL(internal_page)->key_offset_pairs[idx],
+           (INTERNAL(internal_page)->header.number_of_keys) * SIZE);
+
+    // Insert
+    INTERNAL(internal_page)->key_offset_pairs[idx].key         = key;
+    INTERNAL(internal_page)->key_offset_pairs[idx].page_offset = offset;
+
+    return write_page(internal_page);
+}
+
+int insert_into_internal_after_splitting(Page * internal_page, off_t left, bpt_key_t key, off_t right) {
+    if (!internal_page || !left || !right) return -1;
+    if (INTERNAL(internal_page)->header.number_of_keys < INTERNAL_ORDER) {
+        return insert_into_internal(internal_page, key, right);
+    }
+
+    Page * old_page = internal_page;
+    Page * new_page = get_new_page(INTERNAL_PAGE);
+    if (!new_page) return -1;
+
+    int split_idx  = INTERNAL_ORDER >> 1;
+    int insert_idx = find_upper_bound_at_internal(internal_page, key);
+    if (insert_idx < 0) return -1;
+    
+    // Range of memcpy
+    void * start, * end;
+    const int SIZE = sizeof(INTERNAL(internal_page)->key_offset_pairs[0]);
+
+    // New pair need to be inserted in old internal page
+    if (insert_idx < split_idx) {
+        start = &INTERNAL(old_page)->key_offset_pairs[split_idx - 1];
+        end   = &INTERNAL(old_page)->key_offset_pairs[INTERNAL_ORDER];
+        memcpy(INTERNAL(new_page)->key_offset_pairs, start, end - start);
+
+        start = &INTERNAL(old_page)->key_offset_pairs[insert_idx];
+        end   = &INTERNAL(old_page)->key_offset_pairs[split_idx - 1];
+        memcpy(start + SIZE, start, end - start);
+
+        INTERNAL(old_page)->key_offset_pairs[insert_idx].key         = key;
+        INTERNAL(old_page)->key_offset_pairs[insert_idx].page_offset = right;
+
+    // New pair need to be inserted in new internal page
+    } else {
+        start = &INTERNAL(old_page)->key_offset_pairs[split_idx];
+        end   = &INTERNAL(old_page)->key_offset_pairs[insert_idx];
+        memcpy(INTERNAL(new_page)->key_offset_pairs, start, end - start);
+
+        int tmp = end - start + SIZE;
+
+        start = end;
+        end   = &INTERNAL(old_page)->key_offset_pairs[INTERNAL_ORDER];
+        memcpy(INTERNAL(new_page)->key_offset_pairs + tmp, start, end - start);
+
+        INTERNAL(new_page)->key_offset_pairs[insert_idx - split_idx].key        = key;
+        INTERNAL(new_page)->key_offset_pairs[insert_idx - split_idx].page_offset = right;
+    }
+
+    INTERNAL(new_page)->header.parent_page_offset = INTERNAL(old_page)->header.parent_page_offset;
+    INTERNAL(old_page)->header.number_of_keys = split_idx;
+    INTERNAL(new_page)->header.number_of_keys = INTERNAL_ORDER + 1 - split_idx;
+    
+    write_page(old_page);
+    write_page(new_page);
+
+    return insert_into_parent(old_page, key, new_page);
+}
+
+
+/* Insert key into parent page.
+ * If success, return 0. Otherwise, return -1.
+ */
+int insert_into_parent(Page * left_child, bpt_key_t key, Page * right_child) {
+    if (!left_child || !right_child) return -1;
+
+    if (!LEAF(left_child)->header.parent_page_offset) {
+        return insert_into_new_root(left_child, key, right_child);
+    }
+
+    Page * parent_page = read_page(LEAF(left_child)->header.parent_page_offset);
+    if (!parent_page) return -1;
+
+    int ret = INTERNAL(parent_page)->header.number_of_keys < INTERNAL_ORDER ?
+        insert_into_internal(parent_page, key, right_child->offset) :
+        insert_into_internal_after_splitting(parent_page);
+
+    write_page(parent_page);
+    free_page(parent_page);
+    return ret;
+}
+
 /* Insert record into leaf page.
  * If success, return 0. Otherwise, return -1.
  */
@@ -113,16 +221,17 @@ int insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
     }
 
     // Shift records.
-    memcpy(LEAF(leaf_page)->records + idx + sizeof(LEAF(leaf_page)->records[0]), 
-           LEAF(leaf_page)->records + idx,
-           LEAF(leaf_page)->header.number_of_keys - idx);
+    int SIZE = sizeof(LEAF(leaf_page)->records[0]);
+    memcpy(&LEAF(leaf_page)->records[idx] + SIZE, 
+           &LEAF(leaf_page)->records[idx],
+           (LEAF(leaf_page)->header.number_of_keys - idx) * SIZE);
 
     // Insert a new record.
     LEAF(leaf_page)->records[idx].key = key;
     strcpy(LEAF(leaf_page)->records[idx].value, value);
+    LEAF(leaf_page)->header.number_of_keys++;
 
-    write_page(leaf_page);
-    return 0;
+    return write_page(leaf_page);
 }
 
 /* Insert record into leaf page after splitting.
@@ -148,9 +257,9 @@ int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_valu
     
     // Range of memcpy
     void * start, * end;
-    const int SIZE_RECORD = 128;
+    const int SIZE = sizeof(LEAF(leaf_page)->records[0]);
 
-    // Does new record need to be inserted in old leaf node?
+    // New record need to be inserted in old leaf page
     if (insert_idx < split_idx) {
         start = &LEAF(old_leaf)->records[split_idx - 1];
         end   = &LEAF(old_leaf)->records[LEAF_ORDER];
@@ -158,18 +267,18 @@ int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_valu
         
         start = &LEAF(old_leaf)->records[insert_idx];
         end   = &LEAF(old_leaf)->records[split_idx - 1];
-        memcpy(start + SIZE_RECORD, start, end - start);
+        memcpy(start + SIZE, start, end - start);
 
         LEAF(old_leaf)->records[insert_idx].key = key;
         strcpy(LEAF(old_leaf)->records[insert_idx].value, value);
 
-    // New record need to be inserted in new leaf node
+    // New record need to be inserted in new leaf page
     } else {
         start = &LEAF(old_leaf)->records[split_idx];
         end   = &LEAF(old_leaf)->records[insert_idx];
         memcpy(LEAF(new_leaf)->records, start, end - start);
 
-        int tmp = end - start + SIZE_RECORD;
+        int tmp = end - start + SIZE;
 
         start = end;
         end   = &LEAF(old_leaf)->records[LEAF_ORDER];
@@ -184,8 +293,11 @@ int insert_into_leaf_after_splitting(Page * leaf_page, bpt_key_t key, c_bpt_valu
     LEAF(new_leaf)->header.number_of_keys = LEAF_ORDER + 1 - split_idx;
     LEAF(new_leaf)->right_sibling_page = LEAF(old_leaf)->right_sibling_page;
     LEAF(old_leaf)->right_sibling_page = new_leaf->offset;
+    
+    write_page(old_leaf);
+    write_page(new_leaf);
 
-    return 0;
+    return insert_into_parent(old_leaf, LEAF(new_leaf)->records[0].key, new_leaf);
 }
 
 /* Make a new tree.
