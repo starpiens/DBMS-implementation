@@ -19,12 +19,16 @@ const int INTERNAL_ORDER = 249;
 
 // FUNCTION DEFINITIONS.
 
+/******************************        ******************************/
+/*****************************   FIND   *****************************/
+/******************************        ******************************/
+
 /* Find the first key in the 'internal_page' which is greater than 'key'.
  * If success, return the index of upper bound. Otherwise, return -1.
  * When all keys are not greater than 'key', return the last index.
  */
 int find_upper_bound_at_internal(Page * internal_page, bpt_key_t key) {
-    if (!internal_page || !INTERNAL(internal_page)) return -1;
+    if (!internal_page) return -1;
     // [left, right)
     int left = 0, right = INTERNAL(internal_page)->header.number_of_keys;
     while (left < right) {
@@ -99,10 +103,15 @@ c_bpt_value_t find(bpt_key_t key) {
     return val;
 }
 
+
+/******************************        ******************************/
+/*****************************  INSERT  *****************************/
+/******************************        ******************************/
+
 /* Make new root(internal node) and insert key into it.
  * If success, return 0. Otherwise, return -1.
  */
-int insert_into_new_root(Page * left_child, bpt_key_t key, Page * right_child) {
+int insert_into_new_root(off_t left, bpt_key_t key, off_t right) {
 
     return 0;
 }
@@ -127,8 +136,8 @@ int insert_into_internal(Page * internal_page, bpt_key_t key, off_t offset) {
     return write_page(internal_page);
 }
 
-int insert_into_internal_after_splitting(Page * internal_page, off_t left, bpt_key_t key, off_t right) {
-    if (!internal_page || !left || !right) return -1;
+int insert_into_internal_after_splitting(Page * internal_page, bpt_key_t key, off_t right) {
+    if (!internal_page || !right) return -1;
     if (INTERNAL(internal_page)->header.number_of_keys < INTERNAL_ORDER) {
         return insert_into_internal(internal_page, key, right);
     }
@@ -141,9 +150,32 @@ int insert_into_internal_after_splitting(Page * internal_page, off_t left, bpt_k
     int insert_idx = find_upper_bound_at_internal(internal_page, key);
     if (insert_idx < 0) return -1;
     
-    // Range of memcpy
+    // Range of memcpy.
     void * start, * end;
     const int SIZE = sizeof(INTERNAL(internal_page)->key_offset_pairs[0]);
+
+    // New pair need to be inserted in parent page
+    if (insert_idx == split_idx) {
+        // 
+        start = &INTERNAL(old_page)->key_offset_pairs[split_idx].page_offset;
+        end   = &INTERNAL(old_page)->key_offset_pairs[INTERNAL_ORDER - 1];
+        memcpy(&INTERNAL(new_page)->one_more_page, start, end - start);
+
+        insert_into_parent(INTERNAL(old_page)->header.parent_page_offset,
+                           old_page->offset, key, new_page->offset);
+
+    } else if (insert_idx < split_idx) {
+        start = &INTERNAL(old_page)->key_offset_pairs[split_idx - 1].page_offset;
+        end   = &INTERNAL(old_page)->key_offset_pairs[INTERNAL_ORDER - 1];
+        memcpy(INTERNAL(new_page)->one_more_page, start, end - start);
+        
+        
+
+    } else {
+        
+    }
+        
+    // TODO: 여기쯤부터 수정 필요!!!!!!!!!!!!!1
 
     // New pair need to be inserted in old internal page
     if (insert_idx < split_idx) {
@@ -170,7 +202,7 @@ int insert_into_internal_after_splitting(Page * internal_page, off_t left, bpt_k
         end   = &INTERNAL(old_page)->key_offset_pairs[INTERNAL_ORDER];
         memcpy(INTERNAL(new_page)->key_offset_pairs + tmp, start, end - start);
 
-        INTERNAL(new_page)->key_offset_pairs[insert_idx - split_idx].key        = key;
+        INTERNAL(new_page)->key_offset_pairs[insert_idx - split_idx].key         = key;
         INTERNAL(new_page)->key_offset_pairs[insert_idx - split_idx].page_offset = right;
     }
 
@@ -188,19 +220,19 @@ int insert_into_internal_after_splitting(Page * internal_page, off_t left, bpt_k
 /* Insert key into parent page.
  * If success, return 0. Otherwise, return -1.
  */
-int insert_into_parent(Page * left_child, bpt_key_t key, Page * right_child) {
-    if (!left_child || !right_child) return -1;
+int insert_into_parent(off_t parent_off, off_t left_child_off, bpt_key_t key, off_t right_child_off) {
+    if (!left_child_off || !right_child_off) return -1;
 
-    if (!LEAF(left_child)->header.parent_page_offset) {
-        return insert_into_new_root(left_child, key, right_child);
+    if (!parent_off) {
+        return insert_into_new_root(left_child_off, key, right_child_off);
     }
 
-    Page * parent_page = read_page(LEAF(left_child)->header.parent_page_offset);
+    Page * parent_page = read_page(parent_off);
     if (!parent_page) return -1;
 
     int ret = INTERNAL(parent_page)->header.number_of_keys < INTERNAL_ORDER ?
-        insert_into_internal(parent_page, key, right_child->offset) :
-        insert_into_internal_after_splitting(parent_page);
+        insert_into_internal(parent_page, key, right_child_off) :
+        insert_into_internal_after_splitting(parent_page, key, right_child_off);
 
     write_page(parent_page);
     free_page(parent_page);
@@ -337,6 +369,11 @@ int insert(bpt_key_t key, c_bpt_value_t value) {
     free_page(leaf_page);
     return ret;
 }
+
+
+/******************************        ******************************/
+/*****************************  DELETE  *****************************/
+/******************************        ******************************/
 
 /* Find the matching record and delete it if found.
  * If success, return 0. Otherwise, return non-zero value.
