@@ -5,11 +5,10 @@
 
 // GLOBALS & CONSTANTS.
 
-// File pointer to database file.
 static FILE * g_db_file;
 
-// Header page.
-Page * header_page;
+Page * g_header_page;
+Page * g_root_page;
 
 
 // FUNCTION DEFINITIONS.
@@ -20,20 +19,25 @@ Page * header_page;
 int open_db(const char * pathname) {
     // Clean previous data.
     if (g_db_file) fclose(g_db_file);
-    if (header_page) free_page(header_page);
+    if (g_header_page) free_page(g_header_page);
+    if (g_root_page) free_page(g_root_page);
 
     // Read existing DB file.
     if ((g_db_file = fopen(pathname, "r+"))) {
-        header_page = read_page(0);
-        if (!header_page) return -1;
+        g_header_page = read_page(0);
+        if (!g_header_page) return -1;
+        g_root_page   = read_page(HEADER(g_header_page)->root_page_offset);
+        if (!g_root_page) return -1;
 
     // If not, make new.
     } else {
         g_db_file = fopen(pathname, "w+");
         if (!g_db_file) return -1;
 
-        get_new_page(HEADER_PAGE);
-        if (write_page(header_page)) return -1;
+        g_header_page = get_new_page(HEADER_PAGE);
+        g_root_page   = get_new_page(INTERNAL_PAGE);
+        if (write_page(g_header_page) ||
+            write_page(g_root_page)) return -1;
     }
 
     return 0;
@@ -105,14 +109,14 @@ int write_page(const Page * const page) {
  */
 int make_free_pages(int num_free_pages) {
     // Modify header info.
-    off_t prev_free_page_offset = HEADER(header_page)->free_page_offset;
+    off_t prev_free_page_offset = HEADER(g_header_page)->free_page_offset;
 
-    HEADER(header_page)->free_page_offset = HEADER(header_page)->number_of_pages * PAGE_SIZE;
-    HEADER(header_page)->number_of_pages += num_free_pages;
+    HEADER(g_header_page)->free_page_offset = HEADER(g_header_page)->number_of_pages * PAGE_SIZE;
+    HEADER(g_header_page)->number_of_pages += num_free_pages;
 
-    if (write_page(header_page)) {
-        HEADER(header_page)->free_page_offset = prev_free_page_offset;
-        HEADER(header_page)->number_of_pages -= num_free_pages;
+    if (write_page(g_header_page)) {
+        HEADER(g_header_page)->free_page_offset = prev_free_page_offset;
+        HEADER(g_header_page)->number_of_pages -= num_free_pages;
         return -1;
     }
     
@@ -120,10 +124,10 @@ int make_free_pages(int num_free_pages) {
         FreePage new_free_page;
         new_free_page.next_free_page_offset =
               i == num_free_pages ?     // is last page?
-              (HEADER(header_page)->number_of_pages + i) * PAGE_SIZE :
+              (HEADER(g_header_page)->number_of_pages + i) * PAGE_SIZE :
               prev_free_page_offset ;
         
-        Page wrapper = { &new_free_page, (HEADER(header_page)->number_of_pages + i - 1) * PAGE_SIZE };
+        Page wrapper = { &new_free_page, (HEADER(g_header_page)->number_of_pages + i - 1) * PAGE_SIZE };
         write_page(&wrapper);
     }
 
@@ -134,16 +138,16 @@ int make_free_pages(int num_free_pages) {
  * If success, return pointer to the page. Otherwise, return NULL.
  */
 Page * get_free_page(void) {
-    if (!HEADER(header_page)->free_page_offset) {
+    if (!HEADER(g_header_page)->free_page_offset) {
         make_free_pages(10);
     }
 
-    Page * new_free_page = read_page(HEADER(header_page)->free_page_offset);
+    Page * new_free_page = read_page(HEADER(g_header_page)->free_page_offset);
     if (!new_free_page) return NULL;
 
-    HEADER(header_page)->free_page_offset = FREE(new_free_page)->next_free_page_offset;
-    if (write_page(header_page)) {
-        HEADER(header_page)->free_page_offset = new_free_page->offset;
+    HEADER(g_header_page)->free_page_offset = FREE(new_free_page)->next_free_page_offset;
+    if (write_page(g_header_page)) {
+        HEADER(g_header_page)->free_page_offset = new_free_page->offset;
         return NULL;
     }
 

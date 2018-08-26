@@ -26,7 +26,7 @@ typedef enum {
 typedef union {
     char size[120];
     struct {
-        off_t parent_page_offset;   // 0, if this page is root.
+        off_t parent_page_offset;       // 0, if this page is root.
         int   is_leaf;
         int   number_of_keys;
     };
@@ -37,6 +37,12 @@ typedef struct {
     bpt_key_t key;
     char      value[120];
 } Record;
+
+// A pair of key and offset.
+typedef struct {
+    bpt_key_t key;
+    off_t     offset;
+} KeyOffPair;
 
 // Header page is the first page (offset 0-4095) of a data file, and contains metadata.
 typedef union {
@@ -59,7 +65,7 @@ typedef union {
 // Leaf page contains records(pair of key and value).
 typedef struct {
     PageHeader header;
-    u_int64_t  right_sibling_page;   // 0, if rightmost leaf page.
+    u_int64_t  right_sibling_page;      // 0, if rightmost leaf page.
     Record     records[31];
 } LeafPage;
 
@@ -72,10 +78,7 @@ typedef struct {
 typedef struct {
     PageHeader header;
     off_t      one_more_page;
-    struct {
-        bpt_key_t key;
-        off_t     page_offset;
-    } key_offset_pairs[248];
+    KeyOffPair key_offset_pairs[248];
 } InternalPage;
 
 // Wrapper struct for single page.

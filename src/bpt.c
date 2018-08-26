@@ -9,12 +9,15 @@
 
 // GLOBALS & CONSTANTS.
 
-extern Page * header_page;
+// Header page.
+extern Page * g_header_page;
+// Root page.
+extern Page * g_root_page;
 
 // Order of leaf page.
-const int LEAF_ORDER = 32;
+static const int LEAF_ORDER = 32;
 // Order of internal page.
-const int INTERNAL_ORDER = 249;
+static const int INTERNAL_ORDER = 249;
 
 
 // FUNCTION DEFINITIONS.
@@ -41,21 +44,26 @@ int find_upper_bound_at_internal(Page * internal_page, bpt_key_t key) {
     return left;
 }
 
+off_t find_next_page_at_internal(Page * internal_page, bpt_key_t key) {
+    int idx = find_upper_bound_at_internal(internal_page, key);
+    return idx ?
+        INTERNAL(internal_page)->key_offset_pairs[idx - 1].offset :
+        INTERNAL(internal_page)->one_more_page;
+}
+
 /* Find and return leaf page for 'key'.
  * If success, return pointer to leaf page. Otherwise, return NULL.
  */
 Page * find_leaf(bpt_key_t key) {
-    if (!header_page) return NULL;
-    Page * page_ptr = read_page(0);
+    if (!g_header_page) return NULL;
+    Page * page_ptr = read_page(HEADER(g_header_page)->root_page_offset);
     if (!page_ptr) return NULL;
 
     while (!INTERNAL(page_ptr)->header.is_leaf) {
         int idx = find_upper_bound_at_internal(page_ptr, key);
-        off_t next_page_offset = idx ? 
-            INTERNAL(page_ptr)->key_offset_pairs[idx - 1].page_offset : 
-            INTERNAL(page_ptr)->one_more_page;
+        off_t next_page = find_next_page_at_internal(page_ptr, key);
         free_page(page_ptr);
-        page_ptr = read_page(next_page_offset);
+        page_ptr = read_page(next_page);
     }
 
     return page_ptr;
@@ -108,7 +116,51 @@ c_bpt_value_t find(bpt_key_t key) {
 /*****************************  INSERT  *****************************/
 /******************************        ******************************/
 
+KeyOffPair * insert_into_leaf(Page * leaf_page, bpt_key_t key, c_bpt_value_t value) {
 
+}
+
+/* Insert a record into subtree whose root is 'root_subtree'.
+ * If splitting occurs, return pointer of new key and offset pair.
+ * If not, return NULL.
+ */
+KeyOffPair * insert_into_subtree(Page * root_subtree, bpt_key_t key, c_bpt_value_t value) {
+    // Go downward.
+    Page * child_page = read_page(find_next_page_at_internal(root_subtree, key));
+    KeyOffPair * splitted_page = INTERNAL(root_subtree)->header.is_leaf ?
+                                 insert_into_leaf(root_subtree, key, value) :
+                                 insert_into_subtree(child_page, key, value);
+
+    // If splitting didn't happen in child page, do nothing.
+    if (!splitted_page) return NULL;
+    
+    // Insert a new pair in this page without splitting.
+    if (INTERNAL(root_subtree)->header.number_of_keys < INTERNAL_ORDER - 1) {
+        int idx = find_upper_bound_at_internal(root_subtree, key);
+        if (idx < 0) return -1;
+
+        // Shift pairs of key and offset.
+        memcpy(&INTERNAL(root_subtree)->key_offset_pairs[idx] + sizeof(KeyOffPair),
+               &INTERNAL(root_subtree)->key_offset_pairs[idx],
+               (INTERNAL(root_subtree)->header.number_of_keys - idx) * sizeof(KeyOffPair));
+
+        // Insert
+        INTERNAL(root_subtree)->key_offset_pairs[idx].key    = splitted_page->key;
+        INTERNAL(root_subtree)->key_offset_pairs[idx].offset = splitted_page->offset;
+
+    // This page needs to be splitted.
+    } else {
+
+    }
+}
+
+/* Insert a record into database file.
+ * If success, return 0. Otherwise, return -1.
+ */
+int insert(bpt_key_t key, c_bpt_value_t value) {
+    
+    return 0;
+}
 
 
 /******************************        ******************************/
